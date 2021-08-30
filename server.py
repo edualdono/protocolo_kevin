@@ -1,4 +1,11 @@
 '''
+Para corre el siguiente programa debe usarse versiones posteriores a python 3
+y al llamarse debe incluirse un argurmento, dicho argumento es la direccion IP
+dodne esta montado el servidorr.
+
+Ejemplo:
+"python3 server.py 192.168.100.11"
+
 El siguiente programa sera corrido en el Servidor A
 Se deben descargar las bibliotecas pycryptodome y pqcrypto
 '''
@@ -19,24 +26,26 @@ from Crypto.Random import get_random_bytes
 Nombre:     desencriptar
 
 Descripcion: Desencripta un arcvhivo .enc en el original, se debe agregar la terminacion del archivo que se desea recuperar
-             Ejemplo: Si el archivo original es un txt, se debe ingresar un archivo a la direccion de salida del mismo tipo txt. 
+             Ejemplo: Si el archivo original es un txt, se debe ingresar un archivo a la direccion de salida del mismo tipo txt.
 
 Argumentos      --dire: Direccion donde se encuentra el archivo .enc
                 --key: llave con la que se encripto el archivo
                 --iv: vector iv que se utilizo en la encriptacion
-                --dirout: direccion del archivo de salida que se dese obtener 
+                --dirout: direccion del archivo de salida que se dese obtener
 '''
 def desencriptar(dire, key, iv, dirout):
     archivo = open(dire, "rb")
     tam = os.path.getsize(dire)
     encriptador = AES.new(key, AES.MODE_CBC, iv)
     archivo_desencriptado = open(dirout, 'wb')
+    print(tam)
     while True:
         data = archivo.read(256)
         #print(data)
         n = len(data)
         if n == 0:
             break
+        #print(n)
         decd = encriptador.decrypt(data)
         n = len(decd)
         if tam > n:
@@ -50,13 +59,13 @@ def desencriptar(dire, key, iv, dirout):
 '''
 Nombre desencapsulado
 
-Descripcion: Desencapsula el Ct obtenido desde del cliente, genera el par de llave con kyber y 
-realiza la validacion del hash creado co nel Ct y el ID del cliente 
+Descripcion: Desencapsula el Ct obtenido desde del cliente, genera el par de llave con kyber y
+realiza la validacion del hash creado co nel Ct y el ID del cliente
 
 Argumentos:     --id ingresa el ID del cliente
 
 Returns:        --regresa la llave generada despues de pasarla por un KDF
-                --regresa los primeros 16 digitos del hasheo generado a traves del ID y el ct 
+                --regresa los primeros 16 digitos del hasheo generado a traves del ID y el ct
 '''
 def desencapsulado(id):
     #declaramos la libreria de kyber
@@ -71,11 +80,11 @@ def desencapsulado(id):
     ct_hash = connection.recv(256)
     #Se concatena el Ct con el ID del cliente
     ct_hash_esperado = ciphertext + id
-    #declaramos la funcion hash y hasheamos el Ct con el ID 
+    #declaramos la funcion hash y hasheamos el Ct con el ID
     hash = SHA256.new()
     hash.update(ct_hash_esperado)
     ct_hash_esperado = hash.digest()
-    #Se valida si el hash recibido es igual al hash generado en estta funcion 
+    #Se valida si el hash recibido es igual al hash generado en estta funcion
     print('Validacion de Hctb =')
     print(compare_digest(ct_hash,ct_hash_esperado))
     #se desencapsula el Ct con la Sk y obtenemos el Pt
@@ -89,12 +98,12 @@ def desencapsulado(id):
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Inicializamos el socket y lo ponemos en Bind
-HOST = '127.0.0.1'
-PORT = 65432
+HOST = sys.argv[1]
+PORT = 5001
 server_address = (HOST, PORT)
 sock.bind(server_address)
 sock.listen(1)
-#Declaramos las rutas de los archivos 
+#Declaramos las rutas de los archivos
 route_in='doc_enc2.enc'
 route_out='doc_dec.txt'
 #Estos valores son utlizados para recibir el documento
@@ -116,31 +125,33 @@ while True:
 
         #Imprimimos que se ha conectado el cliente
         print('client connected:', client_address)
-        
+
         #FASE1
         key, iv= desencapsulado(id_b)
-        
+
         #FASE2
         #Generamos la Pk para la firma con Dilithium
         public_key_sign, secret_key_sign = generate_keypair()
-        #Enviamos al Cliente la llave publica 
+        #Enviamos al Cliente la llave publica
         connection.sendall(public_key_sign)
-        
-        #Recibimos el documento enmcriptado enviado por el cliente  
+
+        #Recibimos el documento enmcriptado enviado por el cliente
+        CHUNK_SIZE = 1024
+        len_chunk = CHUNK_SIZE
+
         with open(route_in, "wb") as f:
             chunk = connection.recv(CHUNK_SIZE)
             while chunk:
+                print("recibiendo...")
                 f.write(chunk)
                 if len_chunk < CHUNK_SIZE:
                     break
                 else:
-                    #print('recibiendo')
-                    #print(len_chunk)
                     chunk = connection.recv(CHUNK_SIZE)
                     len_chunk = len(chunk)
         f.close()
 
-        #Desencriptamos el documento recibido         
+        #Desencriptamos el documento recibido
         desencriptar(route_in, key, iv, route_out)
 
         #Tomamos el mensaje recibido
@@ -159,15 +170,23 @@ while True:
         msg_hash = hash.digest()
 
         t=1
-        time.sleep(t)
-        #enviamos el mensaje 
-        connection.sendall(mi)
+        time.sleep(.5)
+        #enviamos el mensaje
+        #print(mi)
+        connection.send(mi)
+        #Enviamos el hasheo
+        #print(msg_hash)
+        connection.send(msg_hash)
         #Enviamos el bloque de firma
-        connection.sendall(signature)
-        #Enviamos el hasheo 
-        connection.sendall(msg_hash)
+        #print(signature)
+        connection.send(signature[0:1024])
+        #print(".")
+        time.sleep(.5)
+        #print(".")
+        connection.send(signature[1024:2044])
+
         #FINFASE2
-        time.sleep(t)
-        
+        #time.sleep(t)
+
     finally:
         connection.close()
