@@ -9,7 +9,7 @@ import operator
 import socket
 from numpy import *
 import os
-import paho.mqtt.client as mqttClient
+#import paho.mqtt.client as mqttClient
 import json
 import random
 
