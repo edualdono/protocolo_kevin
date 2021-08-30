@@ -1,4 +1,13 @@
 '''
+Para correr el siguiente programa debe usarse versiones posteriores a python 3
+y al llamarse debe incluirse dos argurmentos, el primer argumento es la
+direccion IP a la que desea conectarse el nodo coordinador, en otras palabras la
+direccion IP del servidor A. El segundo argumento es la direccion con la que
+cuenta el nodo coordinador
+
+Ejemplo:
+"python3 server.py 192.168.100.11 192.168.100.90"
+
 El siguiente programa sera corrido en el Nodo Coordinador B
 Se deben descargar las bibliotecas pycryptodome, pqcrypto y FaBo9Axis_MPU9250
 '''
@@ -262,7 +271,7 @@ def comparacion(client_sock):
     pos1=0
     tiempo=datetime.datetime.now()
        #####covarianza y fusion
-    f=open('resultados.txt.','a')
+    f=open('resultados.txt','a')
     f.write(str(tiempo) + '\n')
     g = open('ayuda.txt', 'a')
 
@@ -420,22 +429,24 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # Connect the socket to the port on the server
 # given by the caller
 #este socket es para utilizar con el Servidor
-server_address = ('127.0.0.1', 65432)
-print('connecting to {} port {}'.format(*server_address))
-sock.connect(server_address)
+HOST=sys.argv[1]
+PORT=5001
+server_address = (HOST, PORT)
+#print('connecting to {} port {}'.format(*server_address))
+#sock.connect(server_address)
 
 #se declara un segundo socket para la autenticacion de sensores
 #WARNING: la direccion debe ser diferente al anterior socket
 start_time = time.time()
 server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-HOST_SOCK = sys.argv[1]
+HOST_SOCK = sys.argv[2]
 PORT_SOCK = 5005
 server_sock_address = (HOST_SOCK, PORT_SOCK)
 server_sock.bind(server_sock_address)
 server_sock.listen(1)
 
 #declaramos rutas a utilizar
-route_in = 'example.txt'
+route_in = 'resultados.txt'
 route_out = 'doc_enc.enc'
 route_out2 = 'doc_dec_2.txt'
 CHUNK_SIZE = 1024
@@ -447,9 +458,13 @@ ip_c = '192.168.100.59'
 try:
     #FASE 0
     id_sensor = corre_imu(server_sock)
-    print("El ID del sensor es:/n")
+    print("El ID del sensor es:")
+    print(id_sensor)
 
     #FASE1
+    print('connecting to {} port {}'.format(*server_address))
+    sock.connect(server_address)
+
     amount_expected = 1184
     amount_received = 0
     key , iv= encapsulado(id_b)
@@ -462,10 +477,28 @@ try:
     encriptar(route_in,key,iv,route_out)
 
     #Enviamos el archivo
+
+    tam_doc = os.path.getsize(route_out)
+    print(tam_doc)
+
+    #confirmacion = True
+    #while confirmacion:
     with open(route_out, 'rb') as f:
-        sock.sendfile(f)
+        data = f.read(CHUNK_SIZE)
+        while data:
+            print("sending...")
+            time.sleep(.5)
+            sock.send(data)
+            data = f.read(CHUNK_SIZE)
+        #sock.sendfile(f,0,tam_doc)
         #print('documento enviado')
     f.close()
+     #   lon_rec = sock.recv(len(tam_doc))
+      #  sock.send(tam_doc)
+      #  print("Longitudes ")
+      #  print(lon_rec)
+       # print(tam_doc)
+       # confirmacion = compare_digest(lon_rec,tam_doc)
 
     #Leemos el mensaje del archivo
     f = open(route_out, 'rb')
@@ -474,17 +507,25 @@ try:
 
     #recibimos el mensaje unico
     mi = sock.recv(32)
-    #recibimos el bloque de firma
-    signature = sock.recv(2044)
+    print(mi)
     #recibimos el mensaje hasheado
-    msg_hash = sock.recv(256)
-    msg_hash_esperado = id_d + signature + mi + mensaje
+    msg_hash = sock.recv(32)
+    print(msg_hash)
+    #recibimos el bloque de firma
+    signature2 = sock.recv(1024)
+    signature3 = sock.recv(1024)
+    signature = signature2 + signature3
+    print(len(signature2))
+    print(len(signature3))
+    print(len(signature))
 
+    msg_hash_esperado = id_d + signature + mi + mensaje
     #print(msg_hash_esperado)
     hash = SHA256.new()
     hash.update(msg_hash_esperado)
     msg_hash_esperado = hash.digest()
 
+    #print(msg_hash_esperado)
     #verificamos que el hasheo que recibimos sea el mismo
     print("Verificacion de HMIm =")
     print(compare_digest(msg_hash_esperado,msg_hash))
